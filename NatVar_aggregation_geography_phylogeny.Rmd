@@ -1,0 +1,122 @@
+---
+title: "AggregationProject_geography_phylogeny"
+author: "KYJ"
+date: "14/08/2024" #adjusted 12/03/2025
+output: html_document
+---
+```{r}
+library(ggplot2)
+library(ape)
+library(castor)
+library(dplyr)
+library(tidyverse)
+library(ggrepel)
+library(patchwork)
+```
+
+___
+Plotting Geographical isolation sites of 13 divergent C.elegans strains.
+
+```{r}
+strain_seq <- c("N2","JU1249","EG4725","MY16","ED3017","MY23","JT11398","CX11314",  "CB4856","LKC34","DL238","JU775","JU258") 
+```
+
+```{r}
+df_strain <- read.csv("Files/20231213_c_elegans_strain_data.csv")
+df_div_strain <- data_frame()
+for (str in strain_seq){
+  df_div_strain <- rbind(df_div_strain,df_strain[df_strain$strain==str,])
+}
+df_div_strain
+```
+
+```{r}
+divergent_gps <- data.frame(strain=df_div_strain$strain, latitude=df_div_strain$latitude, longitude=df_div_strain$longitude)
+divergent_gps
+```
+
+```{r}
+if_color <- ifelse(divergent_gps$strain=='N2','gray36',
+                   ifelse(divergent_gps$strain=='JU1249','darkorange1',
+                          ifelse(divergent_gps$strain=='EG4725','darkorange1',
+                                 ifelse(divergent_gps$strain=='JU775','darkgreen',
+                                        ifelse(divergent_gps$strain=='MY16','darkorange1',
+                                               ifelse(divergent_gps$strain=='JU258','darkgreen',
+                                                      ifelse(divergent_gps$strain=='ED3017','darkorange1',
+                                                             ifelse(divergent_gps$strain=='MY23','darkorange1',
+                                                                    ifelse(divergent_gps$strain=='DL238','darkgreen',
+                                                                           ifelse(divergent_gps$strain=='CB4856','darkgreen',
+                                                                                  ifelse(divergent_gps$strain=='LKC34','darkorchid',
+                                                                                         ifelse(divergent_gps$strain=='JT11398','darkorange1','darkorchid'))))))))))))
+```
+
+```{r, fig.width=5, fig.height=3}
+world_coordinates <- map_data("world") 
+
+world_gps <- ggplot()+  
+  geom_map(data=world_coordinates, map=world_coordinates, 
+           aes(long, lat, map_id=region), 
+           color="white",size=0.05, alpha=1, fill="grey") + 
+  
+  xlab(expression(paste("Longitude (", degree,"E)"))) +
+  ylab(expression(paste("Latitude (", degree,"S)"))) +
+  theme_bw(base_size = 10) +
+  
+  geom_point(data=divergent_gps, aes(longitude, latitude), 
+             alpha=1, size=0.3, shape=19, color=if_color) +  #fill="black"
+  
+  geom_label_repel(data=divergent_gps, aes(x=longitude, y=latitude, label=strain),
+                  box.padding=0.1, point.padding=0, nudge_x=0.1, nudge_y=0.1, color="white",
+                  segment.color="black" , fill=if_color, alpha=1,
+                  segment.size=0.1, label.size=NA, size=2.5,
+                  max.overlaps=100, min.segment.length=0)
+
+world_gps
+ggsave(world_gps,filename="/Users/ykang/Desktop/divergent_origins.pdf")  #"Figures/divergent_origins.pdf"
+```
+
+___
+Plotting phylogenetic tree of 13 13 divergent C.elegans strains.
+
+```{r}
+#pdf("Ce_tree.pdf", width=4, height=150)
+Ce_tree <- read.tree("Files/WI.20231213.hard-filter.isotype.min4.tree")
+plot(Ce_tree)
+add.scale.bar(x=0,y=145,length=0.01, lwd=5, cex = 1, font = 1, lcol = "red", col="red")
+```
+
+```{r,  fig.width=4, fig.height=3}
+#pdf("/Users/ykang/Desktop/div_set_isotype_phylo.pdf", width=6, height=4.5)
+Ce_tree_13 <- keep.tip(Ce_tree, strain_seq, italic = NULL)
+#Ce_tree_13$tip.label<-mixedFontLabel(c("N2","JU1249","EG4725","MY16","ED3017","MY23","JT11398","CX11314","CB4856","LKC34","DL238",   "JU775","JU258"), italic = NULL)
+plot(keep.tip(Ce_tree_13, strain_seq))
+add.scale.bar(x=0.1,y=13, length=0.01, lwd=1, lcol = "black", col="black")
+#unit:nucleotide substitutions per site/substitutions per nucleotide
+```
+
+```{r}
+mat_genetic <- matrix(NA, nrow=13, ncol=13) #strain X strain
+list_genetic <- matrix(NA, nrow=1, ncol=dim(combn(strain_seq,2))[2]) #strain pair combination X 1
+
+for (i in 1:dim(combn(strain_seq,2))[2] ){
+  str1 <- combn(strain_seq,2)[1,i]
+  str2 <- combn(strain_seq,2)[2,i]
+  
+  list_genetic[i] <- get_pairwise_distances(Ce_tree, str1, str2, as_edge_counts=FALSE, check_input=TRUE)
+  
+  mat_genetic[match(str1,strain_seq),match(str2,strain_seq)] <- get_pairwise_distances(Ce_tree, str1, str2, as_edge_counts=FALSE, check_input=TRUE)
+  mat_genetic[match(str2,strain_seq),match(str1,strain_seq)] <- get_pairwise_distances(Ce_tree, str2, str1, as_edge_counts=FALSE, check_input=TRUE)
+}
+```
+
+```{r, fig.width=7, fig.height=7}
+#pdf("Figures/Istoypephylo_raster.pdf")
+par( mar=c(5,5,5,5))
+palette <- colorRampPalette(c('white','black'))(13)   #c('#f0f3ff','#0033BB')
+gen_raster <- image(mat_genetic, col = palette, axes=FALSE) +
+  title(" Phylogenetic Distance \n (substitutions/site)") +
+  mtext(text=strain_seq, side=2, line=0.3, at=seq(0,1, length=13), las=1, cex=0.8) +
+  mtext(text=strain_seq, side=1, line=0.3, at=seq(0,1, length=13), las=2, cex=0.8)
+image.plot(mat_genetic, legend.only=TRUE, col=palette, smallplot = c(.87, .895, .15, .85) )
+```
+

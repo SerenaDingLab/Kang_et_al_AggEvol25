@@ -1,0 +1,216 @@
+---
+title: "AggregationProject_Heritability"
+author: "KYJ"
+date: "20/09/2024" #adjusted 11/02/2025
+output: html_document
+---
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(patchwork)
+library(boot)
+library(lme4)
+library(tidyverse)
+library(futile.logger)
+library(sommer)
+library(data.table)
+```
+
+```{r}
+strain_data <- c("N2","JU1249","EG4725","MY16","ED3017","MY23","JT11398","CX11314", "LKC34","CB4856","DL238","JU775","JU258")
+```
+
+```{r}
+input_data <- read.csv('/Users/ykang/YJ_Antonio/codes/WormAggregates/AggregationDyn/tavg_20worms_mean_agg_df.csv')  #tavg_20worms_agg_timescale_integral.csv  #tavg_20worms_mean_agg_df.csv
+processed_data <- input_data[,c("Strain","Value")]
+colnames(processed_data) <- c("strain", "Value")
+processed_data <- arrange(processed_data, factor(strain, levels = strain_data))
+#set.seed(12345)
+#processed_data$Value <- sample(processed_data$Value, length(processed_data$Value), replace=FALSE)
+processed_data
+```
+
+```{r}
+# genotype marix
+#geno_matrix = read.delim("/Users/ykang/YJ_Codes/CeNDR_heritability/Kang/input_data/output/Genotype_Matrix.tsv", sep="\\")%>%
+#    na.omit()
+geno_matrix <- readLines("/Users/ykang/YJ_Codes/CeNDR_heritability/Kang/input_data/output/Genotype_Matrix.tsv")
+geno_matrix <- stringr::str_replace_all(geno_matrix, "t", "")  #getting rid of "t" tap separator.
+geno_matrix <- textConnection(geno_matrix)
+geno_matrix <- read.delim(geno_matrix, sep="\\") %>% na.omit()
+geno_matrix
+```
+
+```{r}
+#In VCF files, 0 represents the reference allele and integers greater than 0 represent the alternate alleles (i.e., 2, 3, 4 would indicate the 2nd, 3rd or 4th allele in the ALT field for a particular variant). This function only supports variants with a single alternate allele and therefore the alternate values will always be 1. Genotypes are stored in the SnpMatrix as 0, 1, 2 or 3 where 0 = missing, 1 = "0/0", 2 = "0/1" or "1/0" and 3 = "1/1". In SnpMatrix terminology, "A" is the reference allele and "B" is the risk allele. Equivalent statements to those made with 0 and 1 allele values would be 0 = missing, 1 = "A/A", 2 = "A/B" or "B/A" and 3 = "B/B".
+geno_matrix[geno_matrix=="0/0"] <- -1
+geno_matrix[geno_matrix=="0/1"] <- 0
+geno_matrix[geno_matrix=="0/1"] <- 0
+geno_matrix[geno_matrix=="1/1"] <- 1
+geno_matrix
+
+#geno_matrix <- replace(geno_matrix, geno_matrix=="0/0", as.numeric(-1))
+#geno_matrix <- replace(geno_matrix, geno_matrix=="0/1", as.numeric(0))
+#geno_matrix <- replace(geno_matrix, geno_matrix=="1/0", as.numeric(0))
+#geno_matrix <- replace(geno_matrix, geno_matrix=="1/1", as.numeric(1))
+#geno_matrix
+```
+
+```{r}
+trans_geno <- t( geno_matrix %>% dplyr::select(dplyr::one_of(processed_data$strain)) ) #transpose(strain X biallelic markers)
+row_name <- rownames(trans_geno)
+trans_geno <- apply(trans_geno,2, as.numeric, header=TRUE, row.names=1)  #turning values into double.
+rownames(trans_geno) <- row_name  #adding strain row header
+
+#mat_geno <- matrix(as.numeric(unlist(trans_geno)),nrow=nrow(trans_geno)) #data frame to matrix (number form)
+A <- sommer::A.mat(trans_geno)
+data.frame(A)
+```
+
+___
+Heritability Calculation
+
+```{r}
+# Broad-sense heritability H^2
+
+H2.test.boot <- function(data, indicies){
+    
+    d <- data[indicies,]
+    pheno <- as.data.frame(dplyr::select(d, Value))[,1]
+    strain <- as.factor(d$strain)
+    
+    reffMod <- lme4::lmer(pheno ~ 1 + (1|strain))
+    
+    Variances <- as.data.frame(lme4::VarCorr(reffMod, comp = "Variance"))
+    
+    Vg <- Variances$vcov[1]
+    Ve <- Variances$vcov[2]
+    H2 <- Vg/(Vg+Ve)
+    
+     errors <- sqrt(diag(lme4::VarCorr(reffMod, comp = "Variance")$strain))
+    
+    return(H2)
+}
+
+## data is data frame that contains strain and Value column
+H2.test <- function(data){
+  
+    d <- data[indicies,]    
+    pheno <- as.data.frame(dplyr::select(data, Value))[,1]
+    strain <- as.factor(data$strain)
+    
+    reffMod <- lme4::lmer(pheno ~ 1 + (1|strain))
+    
+    Variances <- as.data.frame(lme4::VarCorr(reffMod, comp = "Variance"))
+    
+    Vg <- Variances$vcov[1]
+    Ve <- Variances$vcov[2]
+    H2 <- Vg/(Vg+Ve)
+    
+     errors <- sqrt(diag(lme4::VarCorr(reffMod, comp = "Variance")$strain))
+    
+    return(H2)
+}
+```
+
+```{r}
+# Narrow sense heritability h^2
+
+narrowh2.boot <- function(data, indicies){
+    
+    d <- data[indicies,]
+    strain <- as.factor(d$strain)
+    
+    h2_res <- sommer::mmer(Value ~ 1, random = ~sommer::vsr(strain, Gu = A), data = d)
+    
+    h2 <- as.numeric(sommer::vpredict(h2_res, h2 ~ (V1) / (V1+V2))[[1]][1])
+    
+    return(h2)
+    
+}
+
+# narrow sense heritability with sommer::mmer (no bootstrap)
+narrowh2 <- function(df_h){
+  
+    strain <- as.factor(d$strain)
+    
+    h2_res <- sommer::mmer(Value ~ 1, random = ~sommer::vsr(strain, Gu = A), data = df_h)
+    
+    h2 <- as.numeric(sommer::vpredict(h2_res, h2 ~ (V1) / (V1+V2))[[1]][1])
+    
+    return(h2)
+    
+}
+```
+
+```{r}
+# heritablility function
+
+H2.calc <- function(data, boot = TRUE, type = "broad", reps = 2000){
+    df <- dplyr::select(data, strain, Value)
+    
+    if(boot == TRUE){
+        # if you Error in bca.ci(boot.out, conf, index[1L], L = L, t = t.o, t0 = t0.o,  : estimated adjustment 'a' is NA, then you need to increase reps value.
+        if(type == "broad") {
+            results <- boot::boot(data = df, statistic = H2.test.boot, R = reps) 
+        } else {
+            results <- boot::boot(data = df, statistic = narrowh2.boot, R = reps) 
+        }
+        
+        # get 95% confidence interval
+        ci <- boot.ci(results, type="bca")
+        
+        H2_errors <- data.frame(H2 = ci$t0,
+                                ci_l = ci$bca[4],
+                                ci_r = ci$bca[5])
+        
+        return(H2_errors)
+        
+    } else {
+        if(type == "broad") {
+            H2 <- data.frame(H2 = H2.test(data = df), ci_l = NA, ci_r = NA)
+        } else {
+            H2 <- data.frame(H2 = narrowh2(df_h = df), ci_l = NA, ci_r = NA)
+        }
+        return(H2)
+    }
+    
+}
+```
+
+```{r}
+test <- processed_data %>%
+    dplyr::group_by(strain) %>%
+    dplyr::summarize(num = dplyr::n()) %>%
+    dplyr::filter(num > 2)
+
+nrow(test)
+
+0.8*length(unique(processed_data$strain))
+
+# if nrow(test) >= 0.8*length(unique(processed_data$strain)), strains have enough replicates. 
+# can try bootstrapping for CI.
+```
+
+```{r}
+# Run H2 calculation
+result_broad <- NULL
+result_broad <- H2.calc(processed_data, boot = TRUE, type = "broad", reps = 200) %>% 
+  dplyr::mutate(type = "broad-sense")
+```
+
+```{r}
+# run h2 calculation
+result_narrow <- NULL
+result_narrow <- H2.calc(processed_data, boot = TRUE, type = "narrow", reps = 200) %>% 
+  dplyr::mutate(type = "narrow-sense")
+```
+
+```{r}
+result <- rbind(result_broad, result_narrow) %>%
+    dplyr::select(type, H2, ci_l, ci_r)
+result$phenotype <- "agg_timescale" #"mean_agg"   #agg_timescale
+result
+#write.csv(result, "/Users/ykang/YJ_Antonio/codes/WormAggregates/AggregationDyn/herit_agg_timescale_shuffled.csv", row.names=FALSE, quote=FALSE) 
+```
