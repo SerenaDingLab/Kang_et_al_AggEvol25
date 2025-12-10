@@ -1,0 +1,57 @@
+---
+title: "AggregationProject_OriginMap_wildstrains"
+author: "KYJ"
+date: "20/10/2025"
+output: html_document
+---
+```{r}
+library(ggplot2)
+library(ape)
+library(castor)
+library(dplyr)
+library(tidyverse)
+library(patchwork)
+```
+
+```{r}
+df_all_strain <- read.csv("/Users/ykang/YJ_200strains/20250625_c_elegans_strain_data.csv")
+df_all_strain
+```
+
+```{r}
+wild_strain <- c('AB1','BRC20067','CB4854','CB4856','CB4932','CX11254','CX11262','CX11264','CX11271','CX11276','CX11285','CX11292','CX11307','CX11314','CX11315','DL200','DL226','DL238','ECA246','ECA248','ECA250','ECA251','ECA348','ECA349','ECA36','ECA363','ECA372','ECA396','ED3005','ED3011','ED3012','ED3017','ED3040','ED3046','ED3048','ED3049','ED3052','ED3073','ED3077','EG4347','EG4349','EG4724','EG4725','EG4946','GXW1','JT11398','JU1088','JU1172','JU1200','JU1212','JU1213','JU1242','JU1246','JU1395','JU1400','JU1409','JU1440','JU1491','JU1530','JU1543','JU1568','JU1580','JU1581','JU1586','JU1652','JU1793','JU1808','JU1896','JU2007','JU2131','JU2141','JU2234','JU2464','JU2466','JU2513','JU2519','JU2522','JU2526','JU2534','JU2565','JU2566','JU2578','JU258','JU2587','JU2593','JU2600','JU2800','JU2862','JU2866','JU2878','JU2879','JU2906','JU310','JU311','JU3125','JU3127','JU3134','JU3135','JU3137','JU3140','JU323','JU346','JU360','JU367','JU393','JU394','JU397','JU406','JU440','JU561','JU642','JU751','JU774','JU775','JU778','JU782','JU792','JU830','JU847','KR314','LKC34','MY1','MY10','MY16','MY18','MY2212','MY23','MY2453','MY2530','MY2535','MY2573','MY2693','MY2741','MY679','MY920','NIC1','NIC1107','NIC166','NIC195','NIC199','NIC2','NIC207','NIC231','NIC236','NIC242','NIC251','NIC252','NIC255','NIC256','NIC258','NIC259','NIC260','NIC261','NIC262','NIC265','NIC266','NIC267','NIC268','NIC269','NIC271','NIC272','NIC274','NIC275','NIC276','NIC277','NIC3','NIC513','NIC514','NIC522','NIC523','PS2025','PX179','QG2075','QG536','QG556','QG557','QW947','QX1212','QX1233','QX1791','QX1792','QX1793','QX1794','RC301','WN2001','WN2002','WN2033','XZ1513','XZ1514','XZ1516')
+
+df_strain <- data_frame()
+for (str in wild_strain){
+  df_strain <- rbind(df_strain,df_all_strain[df_all_strain$strain==str,])
+}
+df_strain
+```
+
+```{r}
+gps_wild_strain <- data.frame(strain=df_strain$strain, latitude=df_strain$latitude, longitude=df_strain$longitude)
+gps_wild_strain
+```
+
+```{r,fig.width=5.5, fig.height=2.5}  
+#fig.width=6, fig.height=2.5
+#fig.width=4, fig.height=3.5
+world_coordinates <- map_data("world") 
+
+world_gps <- ggplot()+  
+  geom_map(data=world_coordinates, map=world_coordinates, 
+           aes(long, lat, map_id=region), 
+           color="white",size=0.05, alpha=0.5, fill="grey") + 
+  
+  xlab(expression(paste("Longitude (", degree,"E)"))) +
+  ylab(expression(paste("Latitude (", degree,"S)"))) +
+  ylim(-55,85) + xlim(-160,180) + 
+  theme_bw(base_size = 10) +
+  
+  geom_point(data=gps_wild_strain, aes(longitude, latitude), 
+             alpha=1, size=0.05, shape=19, color='royalblue3')
+
+world_gps
+ggsave(world_gps,filename="/Users/ykang/Desktop/200strains_origins.pdf")
+```
+

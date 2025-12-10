@@ -1,0 +1,285 @@
+---
+title: "AggregationProject_PGLS"
+author: "KYJ"
+date: "21/10/2025"
+output: html_document
+---
+```{r}
+library(ggplot2)
+library(ape)
+library(castor)
+library(fields)
+library(psychometric)
+library(dplyr)
+library(tidyverse)
+library(nlme)
+library(phytools)
+```
+
+```{r}
+glmm_df <- read.csv("/Users/ykang/YJ_writing/Evo_Agg_paper/V2/glmm_df.csv")
+#glmm_df <- read.csv("/Users/ykang/Desktop/glmm_df.csv")
+glmm_df <- glmm_df[,-1]
+rownames(glmm_df) <- glmm_df$strain
+glmm_df <- na.omit(glmm_df)
+glmm_df
+```
+
+```{r}
+df <- read.csv("/Users/ykang/YJ_writing/Evo_Agg_paper/V2/elevation_df.csv")
+glmm_df <- dplyr::left_join(glmm_df,df[,c("strain","elevation_m")], by = "strain")
+rownames(glmm_df) <- glmm_df$strain
+glmm_df <- relocate(glmm_df, 'elevation_m', .after = 'timescale')
+glmm_df
+```
+
+```{r}
+wild_strain <- c('AB1','BRC20067','CB4854','CB4856','CB4932','CX11254','CX11262','CX11264','CX11271','CX11276','CX11285','CX11292','CX11307','CX11314','CX11315','DL200','DL226','DL238','ECA246','ECA248','ECA250','ECA251','ECA348','ECA349','ECA36','ECA363','ECA372','ECA396','ED3005','ED3011','ED3012','ED3017','ED3040','ED3046','ED3048','ED3049','ED3052','ED3073','ED3077','EG4347','EG4349','EG4724','EG4725','EG4946','GXW1','JT11398','JU1088','JU1172','JU1200','JU1212','JU1213','JU1242','JU1246','JU1395','JU1400','JU1409','JU1440','JU1491','JU1530','JU1543','JU1568','JU1580','JU1581','JU1586','JU1652','JU1793','JU1808','JU1896','JU2007','JU2131','JU2141','JU2234','JU2464','JU2466','JU2513','JU2519','JU2522','JU2526','JU2534','JU2565','JU2566','JU2578','JU258','JU2587','JU2593','JU2600','JU2800','JU2862','JU2866','JU2878','JU2879','JU2906','JU310','JU311','JU3125','JU3127','JU3134','JU3135','JU3137','JU3140','JU323','JU346','JU360','JU367','JU393','JU394','JU397','JU406','JU440','JU561','JU642','JU751','JU774','JU775','JU778','JU782','JU792','JU830','JU847','KR314','LKC34','MY1','MY10','MY16','MY18','MY2212','MY23','MY2453','MY2530','MY2535','MY2573','MY2693','MY2741','MY679','MY920','NIC1','NIC1107','NIC166','NIC195','NIC199','NIC2','NIC207','NIC231','NIC236','NIC242','NIC251','NIC252','NIC255','NIC256','NIC258','NIC259','NIC260','NIC261','NIC262','NIC265','NIC266','NIC267','NIC268','NIC269','NIC271','NIC272','NIC274','NIC275','NIC276','NIC277','NIC3','NIC513','NIC514','NIC522','NIC523','PS2025','PX179','QG2075','QG536','QG556','QG557','QW947','QX1212','QX1233','QX1791','QX1792','QX1793','QX1794','RC301','WN2001','WN2002','WN2033','XZ1513','XZ1514','XZ1516')
+```
+
+```{r}
+#pdf("/Users/ykang/Desktop/Ce_tree.pdf", width=8, height=35)
+Ce_tree <- ape::read.tree("/Users/ykang/YJ_writing/Evo_Agg_paper/V2/WI.20250625.hard-filter.isotype.min4.tree")
+tree_pruned <- drop.tip(Ce_tree, setdiff(Ce_tree$tip.label, wild_strain))
+plot(tree_pruned)
+add.scale.bar(x=0.1,y=5,length=0.05, lwd=2, cex = 3, font = 1, lcol = "black", col="black")
+#x=0.15,y=193
+```
+
+```{r}
+tree_extend <- tree_pruned # make copy
+N <- Ntip(tree_extend)
+root_node <- N + 1
+root_to_tip <- dist.nodes(tree_extend)[1:N, root_node] # root to tip distances of each tip
+age_difference <- max(root_to_tip) - root_to_tip # difference from each root-to-tip distance to their maximum
+tip_edges <- tree_extend$edge[, 2] <= Ntip(tree_extend) # grab the edges from the edge matrix that correspond to the tips. Note that the edges in $edge.label correspond to the row numbers in $edge, not the values in those rows
+tree_extend$edge.length[tip_edges] <- tree_extend$edge.length[tip_edges] + age_difference # extend the tips outwards
+is.ultrametric(tree_extend) # yes
+#plot(tree_extend)
+    
+tree_pruned<-drop.tip(tree_extend, setdiff(tree_extend$tip.label, glmm_df$strain))
+plot(tree_pruned)
+#row.names(values_complete)<-values_complete$strain
+
+cor_struct <- corBrownian(1, tree_pruned) #corBrownian(phy = tree_pruned)  #corBrownian(1, tree_pruned)
+```
+
+```{r}
+your_data <- glmm_df[rownames(glmm_df) %in% tree_pruned$tip.label, ]
+# Reorder data to match tree tip order
+your_data <- your_data[match(tree_pruned$tip.label,rownames(your_data)), ]
+# Double check:
+stopifnot(all(rownames(your_data) == tree_pruned$tip.label))
+values_complete<-your_data[complete.cases(your_data),]
+values_complete
+```
+
+```{r}
+cor( values_complete[ , c("mu_temperature", "mu_humidity", "mu_soilmoist", 
+                     "std_temperature", "std_humidity", "std_soilmoist", "elevation_m")] )
+```
+
+```{r}
+heat_df<-values_complete[,2:10]
+colnames(heat_df)<-c( '\U00B5','\U03C4','elevation',
+                      expression(mu_temp),expression(mu_humid),expression(mu_moist),
+                      expression(sigma_temp),expression(sigma_humid),expression(sigma_moist) )
+heat_df
+
+#pdf("/Users/ykang/Desktop/Ce_tree_heatmap_test.pdf", width=4.2, height=35)
+colors<-colorRampPalette(colors=c("white","black"))(100)
+phylo.heatmap(drop.tip(Ce_tree, setdiff(Ce_tree$tip.label, wild_strain)),heat_df,
+              standardize=TRUE, fsize=c(0.8,0.8,0.8), split=c(0.75,0.25), colors=colors)
+```
+
+```{r}
+#pdf("/Users/ykang/Desktop/Ce_tree_heatmap.pdf", width=5.5, height=5.5)
+sub_tree <- drop.tip(Ce_tree, setdiff(Ce_tree$tip.label, wild_strain))
+sub_tree$edge.length <- pmax(tree_pruned$edge.length-0.001, 0.019)
+sub_tree <- force.ultrametric(sub_tree, method = "extend")  
+
+heat_df<-values_complete[,2:10]
+heat_df <- heat_df[,ncol(heat_df):1]
+heat_df_scaled <- as.matrix(scale(heat_df[sub_tree$tip.label, ]))
+open_angle <- 15
+plot(sub_tree, type = "fan", cex = 0.4, no.margin = TRUE, rotate.tree = 90, open.angle = 15, lwd = 0.5, )
+
+# Retrieve last plot coordinates (ape stores them in a hidden object)
+last_plot <- get("last_plot.phylo", envir = .PlotPhyloEnv)
+tip_coords <- cbind(last_plot$xx[1:length(sub_tree$tip.label)],
+                    last_plot$yy[1:length(sub_tree$tip.label)])
+tip_angles <- atan2(tip_coords[, 2], tip_coords[, 1])
+label_angle_deg <- 360 - open_angle/2
+label_angle_rad <- label_angle_deg * pi / 180
+colors <- colorRampPalette(c("royalblue4", "beige"))(100) #beige, royalblue4
+base_radius <- max(sqrt(rowSums(tip_coords^2))) * 0.764
+ring_spacing <- 0.0138
+arc_width <- 0.01
+
+par(lend = 2)
+# Loop through each trait (column) and draw colored segments (rings)
+n_traits <- ncol(heat_df_scaled)
+for (i in seq_len(n_traits)) {
+  radius <- base_radius + (i - 1) * ring_spacing
+  trait_vals <- heat_df_scaled[, i]
+  cols <- colors[cut(trait_vals, breaks = 100, labels = FALSE)]
+  for (j in seq_along(tip_angles)) {
+    theta <- tip_angles[j]
+    segments(
+      x0 = radius * cos(theta - arc_width/3),
+      y0 = radius * sin(theta - arc_width/3),
+      x1 = radius * cos(theta + arc_width/3),
+      y1 = radius * sin(theta + arc_width/3),
+      col = cols[j],
+      lwd = 6.0
+    )
+  }
+}
+
+#colorbar
+n_colors <- length(colors)
+cb_x <- (base_radius + n_traits * ring_spacing + 0.25) * cos(label_angle_rad)
+cb_y_bottom <- (base_radius - ring_spacing) * sin(label_angle_rad)
+cb_y_top <- (base_radius + n_traits * ring_spacing + 0.25) * sin(label_angle_rad)
+cb_y <- seq(cb_y_bottom, cb_y_top, length.out = n_colors + 1)
+rect_width <- 0.018  # thickness of the colorbar
+
+for (k in seq_len(n_colors)) {
+  rect(
+    xleft = cb_x - rect_width/2,
+    xright = cb_x + rect_width/2,
+    ybottom = cb_y[k],
+    ytop = cb_y[k + 1],
+    col = colors[k],
+    border = NA
+  )
+}
+
+min_val <- round(min(heat_df_scaled), 2)
+max_val <- round(max(heat_df_scaled), 2)
+text(cb_x + 0.03, cb_y_bottom, labels = min_val, adj = 0)
+text(cb_x + 0.03, cb_y_top, labels = max_val, adj = 0)
+```
+
+```{r}
+normal_scaling <- function(array){
+    (array-mean(array, na.rm = TRUE))/(quantile(array,0.75, na.rm = TRUE)-quantile(array,0.25, na.rm = TRUE))
+}
+
+#normal scaling
+values_complete_norm <- values_complete
+values_complete_norm['aggregation'] <- normal_scaling( values_complete$aggregation )
+values_complete_norm['timescale'] <- normal_scaling( values_complete$timescale )
+values_complete_norm['elevation_m'] <- normal_scaling( values_complete$elevation_m )
+values_complete_norm['mu_temperature'] <- normal_scaling( values_complete$mu_temperature )
+values_complete_norm['mu_humidity'] <- normal_scaling( values_complete$mu_humidity )
+values_complete_norm['mu_soilmoist'] <- normal_scaling( values_complete$mu_soilmoist )
+values_complete_norm['std_temperature'] <- normal_scaling( values_complete$std_temperature )
+values_complete_norm['std_humidity'] <- normal_scaling( values_complete$std_humidity )
+values_complete_norm['std_soilmoist'] <- normal_scaling( values_complete$std_soilmoist )
+
+values_complete_norm<-na.omit(values_complete_norm)
+values_complete_norm
+```
+
+```{r}
+library(brms)
+options(brms.backend = "cmdstanr")
+
+A <- ape::vcv(tree_pruned, corr = TRUE)
+A <- A[values_complete$strain, values_complete$strain]
+
+env_model_lasso <- brm(
+  aggregation ~ elevation_m + mu_temperature + mu_humidity + mu_soilmoist +
+                std_temperature + std_humidity + std_soilmoist +
+                (1 | gr(strain, cov = A)),
+  data = values_complete,
+  data2 = list(A = A),
+  family = gaussian(),
+  prior = c(prior(horseshoe(df = 1), class = "b")),  # LASSO-like shrinkage
+  chains = 4, cores = 4
+)
+
+summary(env_model_lasso)
+```
+
+
+```{r}
+predictors <- c("mu_temperature", "mu_humidity", "mu_soilmoist",
+                 "std_temperature", "std_humidity", "std_soilmoist", "elevation_m")
+response <- "aggregation"
+
+all_subsets <- unlist(lapply(1:length(predictors), function(i) {
+  combn(predictors, i, FUN = function(x) paste(x, collapse = " + "))
+}), use.names = FALSE)
+
+results <- data.frame(model = character(), AIC = numeric(), stringsAsFactors = FALSE)
+
+for (subset in all_subsets) {
+  formula_str <- paste(response, "~", subset)
+  model <- gls(as.formula(formula_str), data = values_complete_norm, method = "ML", na.action = na.omit)
+  results <- rbind(results,
+                   data.frame(model = formula_str, AIC = AIC(model)))
+}
+
+results <- results[order(results$AIC), ]
+head(results)
+
+env_model <- gls(
+  aggregation ~  elevation_m+mu_temperature+mu_humidity+mu_soilmoist+std_temperature+std_humidity+std_soilmoist,
+    #elevation_m +std_temperature,
+  data = values_complete_norm,
+  correlation = cor_struct, #corAR1(form = ~1 | climate)
+  method = "REML"
+)
+values_complete$corrected_agg <- fitted(env_model)
+summary(env_model)
+
+ggplot(values_complete, aes(y=corrected_agg, x=elevation_m )) +  #corrected_y
+  geom_point(shape = 16, alpha = 0.8, size = 3)
+ggplot(values_complete, aes(y=corrected_agg, x=std_temperature )) +  #corrected_y
+  geom_point(shape = 16, alpha = 0.8, size = 3)
+```
+
+```{r}
+predictors <- c("mu_temperature", "mu_humidity", "mu_soilmoist",
+                 "std_temperature", "std_humidity", "std_soilmoist", "elevation_m")
+response <- "timescale"
+
+all_subsets <- unlist(lapply(1:length(predictors), function(i) {
+  combn(predictors, i, FUN = function(x) paste(x, collapse = " + "))
+}), use.names = FALSE)
+
+results <- data.frame(model = character(), AIC = numeric(), stringsAsFactors = FALSE)
+
+for (subset in all_subsets) {
+  formula_str <- paste(response, "~", subset)
+  model <- gls(as.formula(formula_str), data = values_complete_norm, method = "ML", na.action = na.omit)
+  results <- rbind(results,
+                   data.frame(model = formula_str, AIC = AIC(model)))
+}
+
+results <- results[order(results$AIC), ]
+head(results)
+
+env_model <- gls(
+  timescale ~ elevation_m+mu_temperature+mu_humidity+mu_soilmoist+std_temperature+std_humidity+std_soilmoist,
+    #elevation_m +std_temperature,
+  data = values_complete_norm,
+  correlation = cor_struct, #corAR1(form = ~1 | climate)
+  method = "REML"
+)
+values_complete$corrected_timescale <- fitted(env_model)
+summary(env_model)
+
+ggplot(values_complete, aes(y=corrected_timescale, x=elevation_m )) +  #corrected_y
+  geom_point(shape = 16, alpha = 0.8, size = 3)
+ggplot(values_complete, aes(y=corrected_timescale, x=std_temperature )) +  #corrected_y
+  geom_point(shape = 16, alpha = 0.8, size = 3)
+```
+
+```{r}
+values_complete
+#write.csv(values_complete, "/Users/ykang/Desktop/gls_corrected.csv", row.names=FALSE, quote=FALSE)
+```
+
