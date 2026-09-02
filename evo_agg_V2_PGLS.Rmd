@@ -1,7 +1,7 @@
 ---
 title: "AggregationProject_PGLS"
 author: "KYJ"
-date: "21/10/2025"
+date: "21/10/2025" modified 
 output: html_document
 ---
 ```{r}
@@ -17,7 +17,7 @@ library(phytools)
 ```
 
 ```{r}
-glmm_df <- read.csv("/Users/ykang/YJ_writing/Evo_Agg_paper/V2/glmm_df.csv")
+glmm_df <- read.csv("/Volumes/YounJaeSSD/2021_MaxPlanck/laptop/YJ_writing/Evo_Agg_paper/V2/code/files/glmm_df.csv")
 #glmm_df <- read.csv("/Users/ykang/Desktop/glmm_df.csv")
 glmm_df <- glmm_df[,-1]
 rownames(glmm_df) <- glmm_df$strain
@@ -26,7 +26,7 @@ glmm_df
 ```
 
 ```{r}
-df <- read.csv("/Users/ykang/YJ_writing/Evo_Agg_paper/V2/elevation_df.csv")
+df <- read.csv("/Volumes/YounJaeSSD/2021_MaxPlanck/laptop/YJ_writing/Evo_Agg_paper/V2/code/files/elevation_df.csv")
 glmm_df <- dplyr::left_join(glmm_df,df[,c("strain","elevation_m")], by = "strain")
 rownames(glmm_df) <- glmm_df$strain
 glmm_df <- relocate(glmm_df, 'elevation_m', .after = 'timescale')
@@ -39,29 +39,21 @@ wild_strain <- c('AB1','BRC20067','CB4854','CB4856','CB4932','CX11254','CX11262'
 
 ```{r}
 #pdf("/Users/ykang/Desktop/Ce_tree.pdf", width=8, height=35)
-Ce_tree <- ape::read.tree("/Users/ykang/YJ_writing/Evo_Agg_paper/V2/WI.20250625.hard-filter.isotype.min4.tree")
+Ce_tree <- ape::read.tree("/Volumes/YounJaeSSD/2021_MaxPlanck/laptop/YJ_writing/Evo_Agg_paper/V2/code/files/WI.20250625.hard-filter.isotype.min4.tree")
 tree_pruned <- drop.tip(Ce_tree, setdiff(Ce_tree$tip.label, wild_strain))
 plot(tree_pruned)
 add.scale.bar(x=0.1,y=5,length=0.05, lwd=2, cex = 3, font = 1, lcol = "black", col="black")
 #x=0.15,y=193
-```
 
-```{r}
-tree_extend <- tree_pruned # make copy
-N <- Ntip(tree_extend)
-root_node <- N + 1
-root_to_tip <- dist.nodes(tree_extend)[1:N, root_node] # root to tip distances of each tip
-age_difference <- max(root_to_tip) - root_to_tip # difference from each root-to-tip distance to their maximum
-tip_edges <- tree_extend$edge[, 2] <= Ntip(tree_extend) # grab the edges from the edge matrix that correspond to the tips. Note that the edges in $edge.label correspond to the row numbers in $edge, not the values in those rows
-tree_extend$edge.length[tip_edges] <- tree_extend$edge.length[tip_edges] + age_difference # extend the tips outwards
-is.ultrametric(tree_extend) # yes
-#plot(tree_extend)
-    
-tree_pruned<-drop.tip(tree_extend, setdiff(tree_extend$tip.label, glmm_df$strain))
-plot(tree_pruned)
-#row.names(values_complete)<-values_complete$strain
-
-cor_struct <- corBrownian(1, tree_pruned) #corBrownian(phy = tree_pruned)  #corBrownian(1, tree_pruned)
+#missing strain
+test_list <- tree_pruned$tip.label #tree_pruned$tip.label #values_complete$strain
+num=0
+for (i in wild_strain) {
+  num=num+1
+  if (sum(test_list==i)<1) {
+    print(wild_strain[num])
+    }
+}
 ```
 
 ```{r}
@@ -93,13 +85,14 @@ phylo.heatmap(drop.tip(Ce_tree, setdiff(Ce_tree$tip.label, wild_strain)),heat_df
 ```
 
 ```{r}
-#pdf("/Users/ykang/Desktop/Ce_tree_heatmap.pdf", width=5.5, height=5.5)
+#pdf("/Users/yjkang/Desktop/Ce_tree_heatmap.pdf", width=5.5, height=5.5)
 sub_tree <- drop.tip(Ce_tree, setdiff(Ce_tree$tip.label, wild_strain))
-sub_tree$edge.length <- pmax(tree_pruned$edge.length-0.001, 0.019)
+sub_tree$edge.length <- pmax(tree_pruned$edge.length+0.1, 0.025)
 sub_tree <- force.ultrametric(sub_tree, method = "extend")  
 
 heat_df<-values_complete[,2:10]
 heat_df <- heat_df[,ncol(heat_df):1]
+heat_df$elevation_m <- log1p(heat_df$elevation_m)
 heat_df_scaled <- as.matrix(scale(heat_df[sub_tree$tip.label, ]))
 open_angle <- 15
 plot(sub_tree, type = "fan", cex = 0.4, no.margin = TRUE, rotate.tree = 90, open.angle = 15, lwd = 0.5, )
@@ -111,9 +104,9 @@ tip_coords <- cbind(last_plot$xx[1:length(sub_tree$tip.label)],
 tip_angles <- atan2(tip_coords[, 2], tip_coords[, 1])
 label_angle_deg <- 360 - open_angle/2
 label_angle_rad <- label_angle_deg * pi / 180
-colors <- colorRampPalette(c("royalblue4", "beige"))(100) #beige, royalblue4
-base_radius <- max(sqrt(rowSums(tip_coords^2))) * 0.764
-ring_spacing <- 0.0138
+colors <- colorRampPalette(c("beige","royalblue4"))(100) #beige, royalblue4
+base_radius <- max(sqrt(rowSums(tip_coords^2))) * 0.9
+ring_spacing <- 0.02
 arc_width <- 0.01
 
 par(lend = 2)
@@ -131,7 +124,79 @@ for (i in seq_len(n_traits)) {
       x1 = radius * cos(theta + arc_width/3),
       y1 = radius * sin(theta + arc_width/3),
       col = cols[j],
-      lwd = 6.0
+      lwd = 3
+    )
+  }
+}
+
+#colorbar
+n_colors <- length(colors)
+cb_x <- (base_radius + n_traits * ring_spacing + 0.25) * cos(label_angle_rad)
+cb_y_bottom <- (base_radius - ring_spacing) * sin(label_angle_rad)
+cb_y_top <- (base_radius + n_traits * ring_spacing + 0.25) * sin(label_angle_rad)
+cb_y <- seq(cb_y_bottom, cb_y_top, length.out = n_colors + 1)
+rect_width <- 0.018  # thickness of the colorbar
+
+#for (k in seq_len(n_colors)) {
+#  rect(
+#    xleft = cb_x - rect_width/2,
+#    xright = cb_x + rect_width/2,
+#    ybottom = cb_y[k],
+#    ytop = cb_y[k + 1],
+#    col = colors[k],
+#    border = NA
+#  )
+#}
+
+min_val <- round(min(heat_df_scaled), 2)
+max_val <- round(max(heat_df_scaled), 2)
+#text(cb_x + 0.03, cb_y_bottom, labels = min_val, adj = 0)
+#text(cb_x + 0.03, cb_y_top, labels = max_val, adj = 0)
+```
+
+#heatmap agg ~ elevation
+```{r}
+#pdf("/Users/yjkang/Desktop/Ce_tree_heatmap.pdf", width=5.5, height=5.5)
+sub_tree <- drop.tip(Ce_tree, setdiff(Ce_tree$tip.label, wild_strain))
+sub_tree$edge.length <- pmax(tree_pruned$edge.length-0.001, 0.019)
+sub_tree <- force.ultrametric(sub_tree, method = "extend")  
+
+heat_df<-values_complete[,2:4]
+heat_df <- heat_df[,ncol(heat_df):1]
+heat_df$elevation_m[heat_df$elevation_m==0]
+heat_df$elevation_m <- log1p(heat_df$elevation_m)
+heat_df_scaled <- as.matrix(scale(heat_df[sub_tree$tip.label, ]))
+open_angle <- 15
+plot(sub_tree, type = "fan", cex = 0.4, no.margin = TRUE, rotate.tree = 90, open.angle = 15, lwd = 0.5, )
+
+# Retrieve last plot coordinates (ape stores them in a hidden object)
+last_plot <- get("last_plot.phylo", envir = .PlotPhyloEnv)
+tip_coords <- cbind(last_plot$xx[1:length(sub_tree$tip.label)],
+                    last_plot$yy[1:length(sub_tree$tip.label)])
+tip_angles <- atan2(tip_coords[, 2], tip_coords[, 1])
+label_angle_deg <- 360 - open_angle/2
+label_angle_rad <- label_angle_deg * pi / 180
+colors <- colorRampPalette(c("beige","royalblue4"))(100) #beige, royalblue4
+base_radius <- max(sqrt(rowSums(tip_coords^2))) * 0.764
+ring_spacing <- 0.0138
+arc_width <- 0.01
+
+par(lend = 2)
+# Loop through each trait (column) and draw colored segments (rings)
+n_traits <- ncol(heat_df_scaled)
+for (i in seq_len(n_traits)) {
+  radius <- base_radius + (i + 3.25) * ring_spacing
+  trait_vals <- heat_df_scaled[, i]
+  cols <- colors[cut(trait_vals, breaks = 100, labels = FALSE)]
+  for (j in seq_along(tip_angles)) {
+    theta <- tip_angles[j]
+    segments(
+      x0 = radius * cos(theta - arc_width/3),
+      y0 = radius * sin(theta - arc_width/3),
+      x1 = radius * cos(theta + arc_width/3),
+      y1 = radius * sin(theta + arc_width/3),
+      col = cols[j],
+      lwd = 7.5
     )
   }
 }
@@ -182,28 +247,113 @@ values_complete_norm<-na.omit(values_complete_norm)
 values_complete_norm
 ```
 
+# Kinship matrix
+```{r}
+geno_matrix <- readLines("/Volumes/YounJaeSSD/2021_MaxPlanck/laptop/YJ_Codes/CeNDR_heritability/Kang/input_data/output/260804_200strains/Genotype_Matrix.tsv")
+#geno_matrix <- readLines("/Users/ykang/YJ_writing/Evo_Agg_paper/V2/Genotype_Matrix_200strains.tsv")
+geno_matrix <- stringr::str_replace_all(geno_matrix, "t", "")  #getting rid of "t" tap separator.
+geno_matrix <- textConnection(geno_matrix)
+geno_matrix <- read.delim(geno_matrix, sep="\\") %>% na.omit()
+geno_matrix[geno_matrix=="0/0"] <- -1
+geno_matrix[geno_matrix=="0/1"] <- 0
+geno_matrix[geno_matrix=="0/1"] <- 0
+geno_matrix[geno_matrix=="1/1"] <- 1
+geno_matrix
+```
+
+```{r}
+trans_geno <- t( geno_matrix %>% dplyr::select(dplyr::one_of(values_complete_norm$strain)) ) 
+row_name <- rownames(trans_geno)
+trans_geno <- apply(trans_geno,2, as.numeric, header=TRUE, row.names=1)  #turning values into double.
+rownames(trans_geno) <- row_name  #adding strain row header
+
+#mat_geno <- matrix(as.numeric(unlist(trans_geno)),nrow=nrow(trans_geno)) #data frame to matrix (number form)
+A <- sommer::A.mat(trans_geno)
+data.frame(A)
+```
+
+```{r}
+values_complete <- values_complete[values_complete$strain %in% colnames(A), ]
+values_complete <- arrange(values_complete, factor(strain, levels = colnames(A)))
+
+values_complete_norm <- values_complete_norm[values_complete_norm$strain %in% colnames(A), ]
+values_complete_norm <- arrange(values_complete_norm, factor(strain, levels = colnames(A)))
+values_complete_norm
+```
+
+
 ```{r}
 library(brms)
 options(brms.backend = "cmdstanr")
-
-A <- ape::vcv(tree_pruned, corr = TRUE)
-A <- A[values_complete$strain, values_complete$strain]
+set.seed(1001)
 
 env_model_lasso <- brm(
   aggregation ~ elevation_m + mu_temperature + mu_humidity + mu_soilmoist +
                 std_temperature + std_humidity + std_soilmoist +
                 (1 | gr(strain, cov = A)),
-  data = values_complete,
+  data = values_complete_norm,
   data2 = list(A = A),
-  family = gaussian(),
+  #family = gaussian(),
   prior = c(prior(horseshoe(df = 1), class = "b")),  # LASSO-like shrinkage
-  chains = 4, cores = 4
-)
+  chains = 4, cores = 4, silent = 2)
 
 summary(env_model_lasso)
+beta_draws <- fixef(env_model_lasso, summary = FALSE)
+X <- standata(env_model_lasso)$X
+values_complete$corrected_agg <- rowMeans( X %*% t(beta_draws) ) #corrected_timescale
+  #fitted(env_model_lasso, re_formula = NA)[, "Estimate"] + residuals(env_model_lasso)[, "Estimate"]
+
+ggplot(values_complete, aes(y=corrected_agg, x=elevation_m )) +  #corrected_y
+  geom_point(shape = 16, alpha = 0.8, size = 3)
 ```
 
+```{r}
+set.seed(1001)
 
+env_model_lasso <- brm(
+  timescale ~ elevation_m + mu_temperature + mu_humidity + mu_soilmoist +
+                std_temperature + std_humidity + std_soilmoist +
+                (1 | gr(strain, cov = A)),
+  data = values_complete_norm,
+  data2 = list(A = A),
+  #family = gaussian(),
+  prior = c(prior(horseshoe(df = 1), class = "b")),  # LASSO-like shrinkage
+  chains = 4, cores = 4, silent = 2)
+
+summary(env_model_lasso)
+beta_draws <- fixef(env_model_lasso, summary = FALSE) 
+X <- standata(env_model_lasso)$X
+values_complete$corrected_timescale <- rowMeans( X %*% t(beta_draws) )
+
+ggplot(values_complete, aes(y=corrected_timescale, x=elevation_m )) + 
+  geom_point(shape = 16, alpha = 0.8, size = 3)
+```
+
+```{r}
+predictors <- c("mu_temperature", "mu_humidity", "mu_soilmoist",
+                 "std_temperature", "std_humidity", "std_soilmoist", "elevation_m")
+response <- "aggregation" #timescale  #aggregation
+
+all_subsets <- unlist(lapply(1:length(predictors), function(i) {
+  combn(predictors, i, FUN = function(x) paste(x, collapse = " + "))
+}), use.names = FALSE)
+
+#AIC model selection
+results <- data.frame(model = character(), AIC = numeric(), stringsAsFactors = FALSE)
+for (subset in all_subsets) {
+  formula_str <- paste(response, "~", subset)
+  model <- mmer(
+    fixed = as.formula(formula_str),
+    random = ~ vsr(strain, Gu = A),
+    data = values_complete_norm,
+    verbose = FALSE ) # Suppresses the iteration printouts
+  results <- rbind(results, data.frame(model = formula_str, AIC = model$AIC[1]))
+}
+results <- results[order(results$AIC), ]
+head(results)
+```
+
+#PGLS run before revision.
 ```{r}
 predictors <- c("mu_temperature", "mu_humidity", "mu_soilmoist",
                  "std_temperature", "std_humidity", "std_soilmoist", "elevation_m")
@@ -213,73 +363,127 @@ all_subsets <- unlist(lapply(1:length(predictors), function(i) {
   combn(predictors, i, FUN = function(x) paste(x, collapse = " + "))
 }), use.names = FALSE)
 
+#AIC model selection
 results <- data.frame(model = character(), AIC = numeric(), stringsAsFactors = FALSE)
-
 for (subset in all_subsets) {
   formula_str <- paste(response, "~", subset)
-  model <- gls(as.formula(formula_str), data = values_complete_norm, method = "ML", na.action = na.omit)
-  results <- rbind(results,
-                   data.frame(model = formula_str, AIC = AIC(model)))
+  model <- mmer(
+    fixed = as.formula(formula_str),
+    random = ~ vsr(strain, Gu = A),
+    data = values_complete_norm,
+    verbose = FALSE ) # Suppresses the iteration printouts
+  results <- rbind(results, data.frame(model = formula_str, AIC = model$AIC[1]))
 }
-
 results <- results[order(results$AIC), ]
 head(results)
 
-env_model <- gls(
-  aggregation ~  elevation_m+mu_temperature+mu_humidity+mu_soilmoist+std_temperature+std_humidity+std_soilmoist,
-    #elevation_m +std_temperature,
+#kinship linear mixed model
+env_model <- mmer(
+  fixed = aggregation ~ elevation_m + mu_temperature + mu_humidity + mu_soilmoist + std_temperature + std_humidity + std_soilmoist,
+  random = ~ vsr(strain, Gu = A),
   data = values_complete_norm,
-  correlation = cor_struct, #corAR1(form = ~1 | climate)
-  method = "REML"
+  verbose = FALSE
 )
-values_complete$corrected_agg <- fitted(env_model)
-summary(env_model)
+#get X*beta
+fixed_formula <- ~ elevation_m + mu_temperature + mu_humidity + mu_soilmoist + std_temperature + std_humidity + std_soilmoist
+X_matrix <- model.matrix(fixed_formula, data = values_complete_norm)
+beta_estimates <- as.numeric(env_model$Beta$Estimate)
+values_complete$corrected_agg <- as.vector(X_matrix %*% beta_estimates)
+
+#summary(env_model)
+betas_table <- summary(env_model)$betas
+# residual df = (total number of observations) - (number of fixed effect parameters)
+df_residual <- nrow(values_complete_norm) - nrow(betas_table)
+# two-tailed p-value using t-distribution
+betas_table$p.value <- 2 * pt(-abs(betas_table$t.value), df = df_residual)
+betas_table$p.value <- round(betas_table$p.value, 4)
+print(betas_table)
 
 ggplot(values_complete, aes(y=corrected_agg, x=elevation_m )) +  #corrected_y
-  geom_point(shape = 16, alpha = 0.8, size = 3)
-ggplot(values_complete, aes(y=corrected_agg, x=std_temperature )) +  #corrected_y
-  geom_point(shape = 16, alpha = 0.8, size = 3)
-```
-
-```{r}
-predictors <- c("mu_temperature", "mu_humidity", "mu_soilmoist",
-                 "std_temperature", "std_humidity", "std_soilmoist", "elevation_m")
-response <- "timescale"
-
-all_subsets <- unlist(lapply(1:length(predictors), function(i) {
-  combn(predictors, i, FUN = function(x) paste(x, collapse = " + "))
-}), use.names = FALSE)
-
-results <- data.frame(model = character(), AIC = numeric(), stringsAsFactors = FALSE)
-
-for (subset in all_subsets) {
-  formula_str <- paste(response, "~", subset)
-  model <- gls(as.formula(formula_str), data = values_complete_norm, method = "ML", na.action = na.omit)
-  results <- rbind(results,
-                   data.frame(model = formula_str, AIC = AIC(model)))
-}
-
-results <- results[order(results$AIC), ]
-head(results)
-
-env_model <- gls(
-  timescale ~ elevation_m+mu_temperature+mu_humidity+mu_soilmoist+std_temperature+std_humidity+std_soilmoist,
-    #elevation_m +std_temperature,
-  data = values_complete_norm,
-  correlation = cor_struct, #corAR1(form = ~1 | climate)
-  method = "REML"
-)
-values_complete$corrected_timescale <- fitted(env_model)
-summary(env_model)
-
-ggplot(values_complete, aes(y=corrected_timescale, x=elevation_m )) +  #corrected_y
-  geom_point(shape = 16, alpha = 0.8, size = 3)
-ggplot(values_complete, aes(y=corrected_timescale, x=std_temperature )) +  #corrected_y
   geom_point(shape = 16, alpha = 0.8, size = 3)
 ```
 
 ```{r}
 values_complete
-#write.csv(values_complete, "/Users/ykang/Desktop/gls_corrected.csv", row.names=FALSE, quote=FALSE)
+#write.csv(values_complete, "/Users/yjkang/Desktop/gls_corrected.csv", row.names=FALSE, quote=FALSE)
+```
+
+#Check significance without extreme elevation (Hawaiians)
+
+```{r}
+values_complete <- values_complete %>% filter(!strain %in% c("CB4856", "DL238", "ECA363", "ECA372", "ECA396", "QX1791", "QX1792", "QX1793", "QX1794", "XZ1513", "XZ1514", "XZ1516"))
+
+values_complete_norm <- values_complete
+values_complete_norm['aggregation'] <- normal_scaling( values_complete$aggregation )
+values_complete_norm['timescale'] <- normal_scaling( values_complete$timescale )
+values_complete_norm['elevation_m'] <- normal_scaling( values_complete$elevation_m )
+values_complete_norm['mu_temperature'] <- normal_scaling( values_complete$mu_temperature )
+values_complete_norm['mu_humidity'] <- normal_scaling( values_complete$mu_humidity )
+values_complete_norm['mu_soilmoist'] <- normal_scaling( values_complete$mu_soilmoist )
+values_complete_norm['std_temperature'] <- normal_scaling( values_complete$std_temperature )
+values_complete_norm['std_humidity'] <- normal_scaling( values_complete$std_humidity )
+values_complete_norm['std_soilmoist'] <- normal_scaling( values_complete$std_soilmoist )
+values_complete_norm<-na.omit(values_complete_norm)
+values_complete_norm
+```
+
+```{r}
+trans_geno <- t( geno_matrix %>% dplyr::select(dplyr::one_of(values_complete_norm$strain)) ) 
+row_name <- rownames(trans_geno)
+trans_geno <- apply(trans_geno,2, as.numeric, header=TRUE, row.names=1)  #turning values into double.
+rownames(trans_geno) <- row_name  #adding strain row header
+
+#mat_geno <- matrix(as.numeric(unlist(trans_geno)),nrow=nrow(trans_geno)) #data frame to matrix (number form)
+A <- sommer::A.mat(trans_geno)
+A <- as.matrix(nearPD(A)$mat) #this ensures the matrix is positive-definite.
+data.frame(A)
+
+values_complete_norm <- values_complete_norm[values_complete_norm$strain %in% colnames(A), ]
+values_complete_norm <- arrange(values_complete_norm, factor(strain, levels = colnames(A)))
+```
+
+```{r}
+set.seed(001)
+
+env_model_lasso <- brm(
+  aggregation ~ elevation_m + mu_temperature + mu_humidity + mu_soilmoist +
+                std_temperature + std_humidity + std_soilmoist +
+                (1 | gr(strain, cov = A)),
+  data = values_complete_norm,
+  data2 = list(A = A),
+  #family = gaussian(),
+  prior = c(prior(horseshoe(df = 1), class = "b")),  # LASSO-like shrinkage
+  chains = 4, cores = 4, silent = 2)
+
+summary(env_model_lasso)
+beta_draws <- fixef(env_model_lasso, summary = FALSE)
+X <- standata(env_model_lasso)$X
+values_complete$corrected_agg_noH <- rowMeans( X %*% t(beta_draws) ) #corrected_timescale
+  #fitted(env_model_lasso, re_formula = NA)[, "Estimate"] + residuals(env_model_lasso)[, "Estimate"]
+
+ggplot(values_complete, aes(y=corrected_agg_noH, x=elevation_m )) +  #corrected_y
+  geom_point(shape = 16, alpha = 0.8, size = 3)
+```
+
+```{r}
+set.seed(001)
+
+env_model_lasso <- brm(
+  timescale ~ elevation_m + mu_temperature + mu_humidity + mu_soilmoist +
+                std_temperature + std_humidity + std_soilmoist +
+                (1 | gr(strain, cov = A)),
+  data = values_complete_norm,
+  data2 = list(A = A),
+  #family = gaussian(),
+  prior = c(prior(horseshoe(df = 1), class = "b")),  # LASSO-like shrinkage
+  chains = 4, cores = 4, silent = 2)
+
+print(summary(env_model_lasso), digits = 4)
+beta_draws <- fixef(env_model_lasso, summary = FALSE) 
+X <- standata(env_model_lasso)$X
+values_complete$corrected_timescale_noH <- rowMeans( X %*% t(beta_draws) )
+
+ggplot(values_complete, aes(y=corrected_timescale_noH, x=elevation_m )) + 
+  geom_point(shape = 16, alpha = 0.8, size = 3)
 ```
 
